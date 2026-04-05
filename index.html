@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LANStream</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap');
+
+:root {
+  --bg: #080810;
+  --surface: #0f0f1a;
+  --surface2: #16162a;
+  --border: #252538;
+  --accent: #6c47ff;
+  --green: #00e5a0;
+  --red: #ff4466;
+  --text: #e0e0f0;
+  --muted: #5a5a78;
+  --header: 52px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* scanlines */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.008) 3px, rgba(255,255,255,0.008) 4px);
+  pointer-events: none;
+  z-index: 9000;
+}
+
+/* ── Header ── */
+header {
+  height: var(--header);
+  min-height: var(--header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+  gap: 1rem;
+}
+
+.logo {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.logo-dot { color: var(--accent); }
+
+.header-mid {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  max-width: 480px;
+}
+
+.header-mid input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0 0.75rem;
+  height: 34px;
+  border-radius: 6px;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.header-mid input:focus { border-color: var(--accent); }
+.header-mid input::placeholder { color: var(--muted); }
+
+.toggle-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 34px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--muted);
+  transition: all 0.15s;
+  user-select: none;
+  flex-shrink: 0;
+}
+.toggle-pill:hover { border-color: var(--accent); color: var(--text); }
+.toggle-pill.on { border-color: var(--accent); color: var(--accent); background: rgba(108,71,255,0.1); }
+.toggle-pill .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.15s;
+}
+.toggle-pill.on .dot { background: var(--accent); }
+
+.btn-live {
+  height: 34px;
+  padding: 0 1.2rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-family: 'Syne', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-live:hover { background: #7d5cff; }
+.btn-live:active { transform: scale(0.97); }
+.btn-live.stop { background: var(--red); }
+.btn-live.stop:hover { background: #ff2255; }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.conn-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.conn-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.conn-dot.err { background: var(--red); }
+
+.conn-label {
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--muted);
+}
+
+/* ── Grid ── */
+#grid {
+  flex: 1;
+  padding: 1rem;
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+  position: relative;
+  /* columns set dynamically by JS */
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 1fr;
+  align-content: start;
+}
+
+/* ── Tile ── */
+.tile {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.tile:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tile.mine { border-color: rgba(108,71,255,0.4); }
+
+/* expanded = takes whole grid */
+.tile.expanded {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  border-radius: 12px;
+  border-color: var(--accent);
+  cursor: pointer;
+}
+
+video.tile-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+/* placeholder when no video yet */
+.tile-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--surface2);
+}
+.tile-placeholder .avatar {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.tile-placeholder .connecting {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* label bar at bottom of tile */
+.tile-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 6px 10px;
+  background: linear-gradient(transparent, rgba(8,8,16,0.85));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.tile-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.badge-live {
+  font-size: 0.6rem;
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(0,229,160,0.15);
+  color: var(--green);
+  border: 1px solid rgba(0,229,160,0.35);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.badge-you {
+  font-size: 0.6rem;
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(108,71,255,0.2);
+  color: #a98bff;
+  border: 1px solid rgba(108,71,255,0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.viewers-count {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* expand icon hint */
+.tile-expand-hint {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 24px; height: 24px;
+  border-radius: 5px;
+  background: rgba(8,8,16,0.6);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.tile:hover .tile-expand-hint { opacity: 1; }
+.tile.expanded .tile-expand-hint { opacity: 1; }
+
+/* ── Empty state ── */
+#empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+#empty .big { font-size: 3rem; }
+#empty h2 { font-size: 1rem; color: var(--text); font-weight: 600; }
+#empty p { font-size: 0.82rem; line-height: 1.7; text-align: center; max-width: 300px; }
+
+/* ── Toast ── */
+#toast {
+  position: fixed;
+  bottom: 1.5rem; right: 1.5rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-size: 0.82rem;
+  z-index: 9999;
+  display: none;
+  max-width: 260px;
+}
+#toast.show { display: block; animation: fadeUp 0.25s ease; }
+#toast.ok { border-color: var(--green); color: var(--green); }
+#toast.err { border-color: var(--red); color: var(--red); }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">LAN<span class="logo-dot">●</span>Stream</div>
+
+  <div class="header-mid">
+    <input type="text" id="nameInput" placeholder="Your name..." maxlength="20" />
+    <div class="toggle-pill" id="screenPill" onclick="togglePill('screen')">
+      <div class="dot"></div> Screen
+    </div>
+    <div class="toggle-pill on" id="micPill" onclick="togglePill('mic')">
+      <div class="dot"></div> Mic
+    </div>
+    <button class="btn-live" id="liveBtn" onclick="toggleLive()">
+      <span id="liveBtnDot">●</span> Go Live
+    </button>
+  </div>
+
+  <div class="header-right">
+    <div class="conn-dot" id="connDot"></div>
+    <span class="conn-label" id="connLabel">connecting</span>
+  </div>
+</header>
+
+<div id="grid">
+  <div id="empty">
+    <div class="big">📡</div>
+    <h2>No streams yet</h2>
+    <p>Anyone on this network can go live. Hit <strong>Go Live</strong> above to start sharing your screen.</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+const ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+
+// ── State ─────────────────────────────────────────────────────────────────
+let ws, myId;
+let isStreaming = false;
+let localStream = null;
+let expandedTile = null;
+let pendingStreamList = null;
+
+// tiles[streamId] = { el, name, isMine }
+const tiles = {};
+
+// All RTCPeerConnections, keyed by the OTHER party's client-id.
+// Streamer: pcs[viewerId] = pc
+// Viewer:   pcs[streamerId] = pc
+const pcs = {};
+
+const pills = { screen: true, mic: false };
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen    = () => setConn(true);
+  ws.onclose   = () => { setConn(false); setTimeout(connect, 2000); };
+  ws.onerror   = () => setConn(false);
+  ws.onmessage = e  => handle(JSON.parse(e.data));
+}
+
+function send(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+async function handle(msg) {
+  switch (msg.type) {
+
+    case 'your_id':
+      myId = msg.id;
+      // If stream_list arrived before our ID, process it now
+      if (pendingStreamList) {
+        syncTiles(pendingStreamList);
+        pendingStreamList = null;
+      }
+      break;
+
+    case 'stream_list':
+      // Guard: don't process until we know our own ID, so we don't
+      // accidentally join our own stream or create a tile for ourselves
+      if (myId) syncTiles(msg.streams);
+      else pendingStreamList = msg.streams;
+      break;
+
+    // ── Streamer receives this when a new viewer joins ──
+    case 'viewer_joined':
+      if (isStreaming) await createOffer(msg.viewer_id);
+      break;
+
+    // ── Streamer receives this when a viewer disconnects ──
+    case 'viewer_left':
+      closePc(msg.viewer_id);
+      break;
+
+    // ── Viewer receives this when the streamer stops ──
+    case 'stream_ended':
+      removeTile(msg.stream_id);
+      break;
+
+    // ── Viewer receives offer from streamer ──
+    case 'offer':
+      await handleOffer(msg);
+      break;
+
+    // ── Streamer receives answer from viewer ──
+    case 'answer': {
+      const pc = pcs[msg.from];
+      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      break;
+    }
+
+    // ── Either side receives ICE candidate from the other ──
+    case 'ice': {
+      const pc = pcs[msg.from];
+      if (pc && msg.candidate) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch {}
+      }
+      break;
+    }
+
+    case 'error':
+      toast(msg.msg, 'err');
+      break;
+  }
+}
+
+// ── Go Live ───────────────────────────────────────────────────────────────
+async function toggleLive() {
+  if (isStreaming) return stopLive();
+  const name = document.getElementById('nameInput').value.trim() || 'Anonymous';
+  if (!pills.screen && !pills.mic) { toast('Enable screen or mic first', 'err'); return; }
+
+  try {
+    const stream = new MediaStream();
+
+    if (pills.screen) {
+      const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      s.getTracks().forEach(t => stream.addTrack(t));
+      // stop streaming if user clicks the browser's native "Stop sharing"
+      s.getVideoTracks()[0].onended = () => stopLive();
+    }
+    if (pills.mic) {
+      const m = await navigator.mediaDevices.getUserMedia({ audio: true });
+      m.getAudioTracks().forEach(t => stream.addTrack(t));
+    }
+
+    localStream = stream;
+    isStreaming = true;
+
+    addLocalTile(name, stream);
+
+    document.getElementById('liveBtn').classList.add('stop');
+    document.getElementById('liveBtn').innerHTML = '<span>■</span> Stop';
+
+    send({ type: 'start_stream', name });
+    toast('You are live!', 'ok');
+  } catch (err) {
+    toast('Capture failed: ' + err.message, 'err');
+  }
+}
+
+function stopLive() {
+  if (!isStreaming) return;
+  isStreaming = false;
+
+  localStream?.getTracks().forEach(t => t.stop());
+  localStream = null;
+
+  removeTile(myId);
+  Object.keys(pcs).forEach(closePc);
+
+  document.getElementById('liveBtn').classList.remove('stop');
+  document.getElementById('liveBtn').innerHTML = '<span>●</span> Go Live';
+
+  send({ type: 'stop_stream' });
+  toast('Stream stopped', 'err');
+}
+
+// ── Tile management ───────────────────────────────────────────────────────
+function addLocalTile(name, stream) {
+  const tile = makeTile(myId, name, true);
+  showVideoInTile(myId, stream, true);
+}
+
+function syncTiles(streams) {
+  const ids = new Set(streams.map(s => s.id));
+
+  // Remove stale tiles (keep our own if we're live)
+  for (const sid of Object.keys(tiles)) {
+    if (sid === myId && isStreaming) continue;
+    if (!ids.has(sid)) removeTile(sid);
+  }
+
+  // Add new / update existing
+  for (const s of streams) {
+    if (s.id === myId) {
+      updateBarViewers(myId, s.viewers);
+      continue;
+    }
+    if (!tiles[s.id]) {
+      makeTile(s.id, s.name, false);
+      updateBarViewers(s.id, s.viewers);
+      // Ask to join — server will tell the streamer, streamer sends us an offer
+      send({ type: 'join_stream', stream_id: s.id });
+    } else {
+      updateBarViewers(s.id, s.viewers);
+    }
+  }
+
+  updateLayout();
+  updateEmpty();
+}
+
+function makeTile(streamId, name, isMine) {
+  if (tiles[streamId]) return tiles[streamId].el;
+
+  const tile = document.createElement('div');
+  tile.className = 'tile' + (isMine ? ' mine' : '');
+  tile.dataset.id = streamId;
+  tile.innerHTML = `
+    <div class="tile-placeholder">
+      <div class="avatar" style="background:hsl(${nameHue(name)},55%,32%);">${initials(name)}</div>
+      <div class="connecting">${isMine ? 'preview' : 'connecting...'}</div>
+    </div>
+    <video class="tile-video" autoplay playsinline style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;"></video>
+    <div class="tile-bar">
+      <span class="tile-name">${esc(name)}</span>
+      <span class="tile-meta">
+        ${isMine ? '<span class="badge-you">you</span>' : ''}
+        <span class="badge-live">live</span>
+        <span class="viewers-count" id="vc-${streamId}">0 👁</span>
+      </span>
+    </div>
+    <div class="tile-expand-hint">⛶</div>
+  `;
+
+  tile.addEventListener('click', () => toggleExpand(streamId));
+  document.getElementById('grid').appendChild(tile);
+  tiles[streamId] = { el: tile, isMine, name };
+  return tile;
+}
+
+function showVideoInTile(streamId, stream, muted) {
+  const t = tiles[streamId];
+  if (!t) return;
+  const video = t.el.querySelector('video');
+  video.srcObject = stream;
+  video.muted = muted;
+  video.style.display = 'block';
+  t.el.querySelector('.tile-placeholder').style.display = 'none';
+}
+
+function removeTile(streamId) {
+  if (!tiles[streamId]) return;
+  const { el } = tiles[streamId];
+  if (expandedTile === el) collapseAll();
+  el.remove();
+  delete tiles[streamId];
+  closePc(streamId);
+  updateLayout();
+  updateEmpty();
+}
+
+function updateBarViewers(streamId, count) {
+  const el = document.getElementById('vc-' + streamId);
+  if (el) el.textContent = count + ' 👁';
+}
+
+// ── Expand / collapse ─────────────────────────────────────────────────────
+function toggleExpand(streamId) {
+  const { el } = tiles[streamId] || {};
+  if (!el) return;
+  if (expandedTile === el) {
+    collapseAll();
+  } else {
+    collapseAll();
+    el.classList.add('expanded');
+    expandedTile = el;
+    el.querySelector('.tile-expand-hint').textContent = '✕';
+  }
+}
+
+function collapseAll() {
+  if (!expandedTile) return;
+  expandedTile.classList.remove('expanded');
+  expandedTile.querySelector('.tile-expand-hint').textContent = '⛶';
+  expandedTile = null;
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') collapseAll(); });
+
+// ── Grid layout ───────────────────────────────────────────────────────────
+function updateLayout() {
+  const n = Object.keys(tiles).length;
+  const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  document.getElementById('grid').style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+}
+
+function updateEmpty() {
+  document.getElementById('empty').style.display =
+    Object.keys(tiles).length === 0 ? 'flex' : 'none';
+}
+
+// ── WebRTC — viewer side (receives offer, sends answer) ───────────────────
+async function handleOffer(msg) {
+  const streamerId = msg.from;
+  closePc(streamerId);
+
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  pcs[streamerId] = pc;
+
+  // Pre-create MediaStream and attach to video BEFORE tracks arrive.
+  // This avoids the autoplay race: srcObject must be set before play() is called.
+  const remoteStream = new MediaStream();
+  const tileRef = tiles[streamerId];
+  if (tileRef) {
+    const video = tileRef.el.querySelector('video');
+    video.srcObject = remoteStream;
+  }
+
+  pc.onicecandidate = e => {
+    if (e.candidate) send({ type: 'ice', target: streamerId, candidate: e.candidate });
+  };
+
+  pc.ontrack = e => {
+    // Add incoming track to the already-wired stream
+    remoteStream.addTrack(e.track);
+
+    const tile = tiles[streamerId];
+    if (!tile) return;
+    const video = tile.el.querySelector('video');
+    video.style.display = 'block';
+    tile.el.querySelector('.tile-placeholder').style.display = 'none';
+    // Explicitly call play() — needed on HTTPS LAN pages where autoplay
+    // doesn't fire reliably when srcObject is assigned dynamically
+    video.play().catch(() => {});
+  };
+
+  await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  send({ type: 'answer', target: streamerId, sdp: pc.localDescription });
+}
+
+// ── WebRTC — streamer side (creates offer per viewer) ─────────────────────
+async function createOffer(viewerId) {
+  closePc(viewerId);
+
+  const pc = new RTCPeerConnection({ iceServers: ICE });
+  pcs[viewerId] = pc;
+
+  // Must add tracks BEFORE creating the offer so they appear in the SDP
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  pc.onicecandidate = e => {
+    if (e.candidate) send({ type: 'ice', target: viewerId, candidate: e.candidate });
+  };
+
+  // iceRestart: true ensures a fresh connection if called for an existing viewer
+  const offer = await pc.createOffer({ iceRestart: true });
+  await pc.setLocalDescription(offer);
+  send({ type: 'offer', target: viewerId, sdp: pc.localDescription });
+}
+
+function closePc(id) {
+  if (pcs[id]) { pcs[id].close(); delete pcs[id]; }
+}
+
+// ── Pills ─────────────────────────────────────────────────────────────────
+function togglePill(which) {
+  pills[which] = !pills[which];
+  document.getElementById(which + 'Pill').classList.toggle('on', pills[which]);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function setConn(ok) {
+  document.getElementById('connDot').className = 'conn-dot ' + (ok ? 'ok' : 'err');
+  document.getElementById('connLabel').textContent = ok ? 'connected' : 'reconnecting...';
+}
+
+function nameHue(name) {
+  return Math.abs(name.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % 360;
+}
+function initials(name) {
+  return name.split(' ').map(w => w[0] || '').join('').substring(0, 2).toUpperCase() || '?';
+}
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+// Screen on by default, mic off
+document.getElementById('screenPill').classList.add('on');
+document.getElementById('micPill').classList.remove('on');
+updateEmpty();
+connect();
+</script>
+</body>
+</html>
